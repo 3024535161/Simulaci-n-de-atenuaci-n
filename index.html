@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Atenuación de Cables</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Librería Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .error { color: red; font-size: 0.875rem; }
+    </style>
+</head>
+<body class="bg-gray-100 flex justify-center items-center h-screen">
+
+    <div class="bg-white p-6 rounded-lg shadow-md w-full max-w-md">
+        <h1 class="text-2xl font-bold mb-6">Calculadora de Atenuación de Cables</h1>
+        
+        <form id="attenuationForm" class="space-y-4">
+            <!-- Selección de tipo de cable -->
+            <div>
+                <label for="cableType" class="block text-gray-700">Tipo de Cable:</label>
+                <select id="cableType" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
+                    <option value="cat5e">Cat 5e</option>
+                    <option value="cat6">Cat 6</option>
+                    <option value="cat6a">Cat 6A</option>
+                    <option value="cat7">Cat 7</option>
+                    <option value="fiber">Fibra Óptica</option>
+                </select>
+            </div>
+
+            <!-- Entrada de distancia -->
+            <div>
+                <label for="distance" class="block text-gray-700">Distancia (metros):</label>
+                <input type="number" id="distance" class="mt-1 block w-full p-2 border border-gray-300 rounded-md" placeholder="Ingresa la distancia" min="0" required>
+                <span id="distanceError" class="error"></span>
+            </div>
+
+            <!-- Entrada de frecuencia -->
+            <div>
+                <label for="frequency" class="block text-gray-700">Frecuencia (MHz):</label>
+                <input type="number" id="frequency" class="mt-1 block w-full p-2 border border-gray-300 rounded-md" placeholder="Ingresa la frecuencia" min="0" required>
+                <span id="frequencyError" class="error"></span>
+            </div>
+
+            <!-- Opciones adicionales -->
+            <div>
+                <label class="block text-gray-700">Condiciones Ambientales:</label>
+                <div class="mt-1">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="highTemp" class="mr-2">
+                        Expuesto a altas temperaturas
+                    </label>
+                </div>
+            </div>
+
+            <!-- Botón de cálculo -->
+            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700">
+                Calcular Atenuación
+            </button>
+        </form>
+
+        <!-- Resultado -->
+        <div id="result" class="mt-4 text-gray-800"></div>
+
+        <!-- Gráfico de barras -->
+        <canvas id="attenuationChart" class="mt-6"></canvas>
+    </div>
+
+    <!-- JavaScript para el cálculo y gráfico -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Configuración del gráfico de barras
+            const ctx = document.getElementById('attenuationChart').getContext('2d');
+            const chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [], // Distancia
+                    datasets: [{
+                        label: 'Atenuación (dB)',
+                        data: [], // Atenuación
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    animation: {
+                        duration: 2000, // Animación lenta
+                        easing: 'easeInOutQuart'
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true
+                        },
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            const form = document.getElementById('attenuationForm');
+            const distanceInput = document.getElementById('distance');
+            const frequencyInput = document.getElementById('frequency');
+            const resultDiv = document.getElementById('result');
+
+            form.addEventListener('submit', function(event) {
+                event.preventDefault();
+                
+                // Validación
+                const distance = parseFloat(distanceInput.value);
+                const frequency = parseFloat(frequencyInput.value);
+                let hasError = false;
+
+                if (distance <= 0 || isNaN(distance)) {
+                    document.getElementById('distanceError').textContent = "Por favor, ingresa una distancia válida.";
+                    hasError = true;
+                } else {
+                    document.getElementById('distanceError').textContent = "";
+                }
+
+                if (frequency <= 0 || isNaN(frequency)) {
+                    document.getElementById('frequencyError').textContent = "Por favor, ingresa una frecuencia válida.";
+                    hasError = true;
+                } else {
+                    document.getElementById('frequencyError').textContent = "";
+                }
+
+                if (hasError) return;
+
+                const cableType = document.getElementById('cableType').value;
+                const highTemp = document.getElementById('highTemp').checked;
+
+                // Factores de atenuación por tipo de cable
+                const cableData = {
+                    'cat5e': { a: 21.3, b: 0.043, maxFrequency: 350 },
+                    'cat6': { a: 19.8, b: 0.022, maxFrequency: 500 },
+                    'cat6a': { a: 18.1, b: 0.020, maxFrequency: 500 },
+                    'cat7': { a: 17.3, b: 0.018, maxFrequency: 600 },
+                    'fiber': { a: 0.35, b: 0.00004, maxFrequency: 100000 }
+                };
+
+                if (frequency > cableData[cableType].maxFrequency) {
+                    alert(`La frecuencia máxima para ${cableType.toUpperCase()} es ${cableData[cableType].maxFrequency} MHz.`);
+                    return;
+                }
+
+                // Cálculo de atenuación
+                const { a, b } = cableData[cableType];
+                let attenuation = (a * Math.sqrt(frequency) + b * frequency) * (distance / 100);
+
+                // Ajuste por alta temperatura
+                if (highTemp) {
+                    attenuation *= 1.2; // Incremento del 20%
+                }
+
+                // Función para animar el texto de atenuación
+                function animateValue(element, start, end, duration) {
+                    let startTimestamp = null;
+
+                    function step(timestamp) {
+                        if (!startTimestamp) startTimestamp = timestamp;
+                        const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                        element.textContent = `La atenuación total es de ${(progress * (end - start) + start).toFixed(2)} dB.`;
+
+                        if (progress < 1) {
+                            requestAnimationFrame(step);
+                        } else {
+                            element.textContent = `La atenuación total es de ${end.toFixed(2)} dB.`;
+                        }
+                    }
+
+                    requestAnimationFrame(step);
+                }
+
+                // Mostrar el resultado en texto con animación
+                animateValue(resultDiv, 0, attenuation, 2000);
+
+                // Actualizar el gráfico de barras
+                chart.data.labels.push(`${distance} m`);
+                chart.data.datasets[0].data.push(attenuation.toFixed(2));
+                chart.update();
+            });
+        });
+    </script>
+</body>
+</html>
